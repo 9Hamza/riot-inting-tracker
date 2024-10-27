@@ -31,7 +31,7 @@ function InterOfTheDay() {
             {error && <p className="error-message">{error}</p>}
             {inter && (
                 <div className="inter-info">
-                    <p>Inter of the day is: {inter.playerName}</p>
+                    <p>Inter of the day is: {inter.playerGameName}</p>
                     <p>with {inter.deaths} deaths</p>
                 </div>
             )}

@@ -1,9 +1,28 @@
+/*
+
+IMPORTANT INFORMATION TO KNOW WHEN RUNNING THIS FILE:
+
+- WHEN RUNNING THIS FROM TERMINAL, MY PWD NEEDS TO BE IN THE ROOT DIRECTORY. AFTER THAT, I CAN DO 
+- `node src/server.js`. ALSO MAKE SURE THAT .ENV FILE IS PLACED IN THE ROOT DIRECTORY.
+
+*/
+
+import dotenv from 'dotenv';
 import express from 'express';
 import axios from 'axios';
+import cors from 'cors'; // Import CORS
 
+dotenv.config();
+
+const riotApiKey = process.env.VITE_RIOT_API_KEY;
 const app = express();
 const port = 3000;
-const riotApiKey = import.meta.env.VITE_RIOT_API_KEY;
+
+// Enable CORS for all routes
+app.use(cors({
+  origin: 'http://localhost:5173', // Allow only your frontend's origin
+  methods: ['GET'], // Allow only specific methods if necessary
+}));
 
 app.get('/riot-api/:puuid', async (req, res) => {
   const { puuid } = req.params;
@@ -19,4 +38,5 @@ app.get('/riot-api/:puuid', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
+  console.log(`Server: the API key being fetched from env variables is: ${riotApiKey}`);
 });
