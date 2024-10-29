@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { findMostRecentInter } from './riotApis';
+import { onSearchPlayerClicked } from './riotApis';
 import './InterOfTheDay.css'; // We'll create this CSS file
 
 function InterOfTheDay() {
@@ -22,6 +23,7 @@ function InterOfTheDay() {
     };
 
     return (
+        <>
         <div className="inter-of-the-day">
             <h2>Inter of the Day</h2>
             <button onClick={handleFindInter} disabled={loading}>
@@ -36,6 +38,12 @@ function InterOfTheDay() {
                 </div>
             )}
         </div>
+        <div>
+            <input type='text' id='input_game_name'></input>
+            #<input type='text' id='input_tag_line'></input>
+            <input type='button' id='search_button' value='Search by riot id' onClick={onSearchPlayerClicked}></input>
+        </div>
+        </>
     );
 }
 

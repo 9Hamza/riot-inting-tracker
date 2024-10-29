@@ -36,6 +36,26 @@ app.get('/riot-api/:puuid', async (req, res) => {
   }
 });
 
+// New route to search by Riot ID
+app.get('/riot-api/:gameName/:tagLine', async (req, res) => {
+  const { gameName, tagLine } = req.params;
+  try {
+    const apiUrl = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}/?api_key=${riotApiKey}`;
+    console.log(apiUrl);
+    const response = await axios.get(apiUrl);
+    
+    if (!response.data) {
+      return res.status(404).send('Player not found');
+    }
+
+    const data = response.data;
+    const puuid = data.puuid;
+    res.json({ puuid, accountData: data });
+  } catch (error) {
+    res.status(error.response?.status || 500).send(error.message);
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Server: the API key being fetched from env variables is: ${riotApiKey}`);

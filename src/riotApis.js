@@ -242,6 +242,46 @@ export async function fetchRiotAccount(puuid) {
       }
   
       const data = await response.json();
+      console.log(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching Riot account:', error);
+    }
+}
+
+var gameName = "";
+var tagLine = "";
+
+export async function onSearchPlayerClicked() {
+    gameName = document.getElementById("input_game_name").value;
+    tagLine = document.getElementById("input_tag_line").value;
+    console.log(`Searching for ${gameName}#${tagLine}`);
+    expSearchByRiotId();
+}
+
+async function searchByRiotId() {
+    var apiUrl = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}/?api_key=${riotApiKey}`;
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  
+    const data = await response.json();
+    var puuid = data.puuid;
+    await fetchRiotAccount(puuid);
+}
+
+export async function expSearchByRiotId() {
+    try {
+      const response = await fetch(`http://localhost:3000/riot-api/${gameName}/${tagLine}`);
+      
+      // Check if the request was successful
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      console.log(data);
       return data;
     } catch (error) {
       console.error('Error fetching Riot account:', error);
