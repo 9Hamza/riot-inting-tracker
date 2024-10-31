@@ -23,28 +23,47 @@ function InterOfTheDay() {
     };
 
     return (
-        <>
-        <div className="inter-of-the-day">
-            <h2>Inter of the Day</h2>
-            <button onClick={handleFindInter} disabled={loading}>
-                {loading ? 'Finding Inter...' : 'Find Inter of the Day'}
-            </button>
-            {loading && <div className="loading-spinner"></div>}
-            {error && <p className="error-message">{error}</p>}
-            {inter && (
-                <div className="inter-info">
-                    <p>Inter of the day is: {inter.playerGameName}</p>
-                    <p>with {inter.deaths} deaths</p>
-                </div>
-            )}
+        <div className="container">
+            <div className="inter-of-the-day">
+                <h2 className="title">Inter of the Day</h2>
+                <button 
+                    className="lol-button" 
+                    onClick={handleFindInter} 
+                    disabled={loading}
+                >
+                    {loading ? 'Finding Inter...' : 'Find Inter of the Day'}
+                </button>
+                {loading && <div className="loading-spinner"></div>}
+                {error && <p className="error-message">{error}</p>}
+                {inter && (
+                    <div className="inter-info">
+                        <p className="inter-name">Inter of the day is: {inter.playerGameName}</p>
+                        <p className="inter-stats">with {inter.deaths} deaths</p>
+                    </div>
+                )}
+            </div>
+            <div className="search-section">
+                <input 
+                    type='text' 
+                    id='input_game_name' 
+                    className="lol-input" 
+                    placeholder="Game Name"
+                />
+                <span className="hashtag">#</span>
+                <input 
+                    type='text' 
+                    id='input_tag_line' 
+                    className="lol-input" 
+                    placeholder="Tag Line"
+                />
+                <button 
+                    className="lol-button search-button" 
+                    onClick={onSearchPlayerClicked}
+                >
+                    Search by Riot ID
+                </button>
+            </div>
         </div>
-        <div>
-            <input type='text' id='input_game_name'></input>
-            #<input type='text' id='input_tag_line'></input>
-            <input type='button' id='search_button' value='Search by riot id' onClick={onSearchPlayerClicked}></input>
-        </div>
-        </>
     );
 }
-
 export default InterOfTheDay;

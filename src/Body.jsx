@@ -3,7 +3,7 @@ import InterOfTheDay from './InterOfTheDay.jsx';
 
 function Body() {
     return(
-        <div>
+        <div className='border'>
             <h1 className="body"></h1>
             <InterOfTheDay/>
         </div>

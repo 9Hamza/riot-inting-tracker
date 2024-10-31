@@ -3,9 +3,16 @@
     left: 0;
     bottom: 0;
     width: 100%;
-    background-color: #f8f9fa;
+    background-color: #0A1428;
     color: #333;
     text-align: center;
     padding: 10px 0;
     border-top: 1px solid #e7e7e7;
+    opacity: 0.6;
+}
+  
+.footer * {
+    position: relative;
+    z-index: 5; /* Brings text on top of the overlay */
+    color: white; /* Ensures text color remains white */
 }

@@ -3,9 +3,11 @@ import './Footer.css';
 
 function Footer() {
     return (
-        <footer className="footer">
-            <p>&copy; {new Date().getFullYear()} Inting Tracker</p>
-        </footer>
+        <div>
+            <footer className="footer border">
+                <p>&copy; {new Date().getFullYear()} Inting Tracker</p>
+            </footer>
+        </div>
     );
 }
 
