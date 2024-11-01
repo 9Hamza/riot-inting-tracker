@@ -234,7 +234,7 @@ async function getHighestDeathFromMatchHistoryList(puuid, matchHistoryList) {
 
 export async function fetchRiotAccount(puuid) {
     try {
-      const response = await fetch(`http://localhost:3000/riot-api/${puuid}`);
+      const response = await fetch(`http://localhost:3000/riot/account/v1/accounts/by-puuid/${puuid}`);
       
       // Check if the request was successful
       if (!response.ok) {
@@ -242,7 +242,7 @@ export async function fetchRiotAccount(puuid) {
       }
   
       const data = await response.json();
-      console.log(data);
+      console.log("fetchRiotAccount: "+data);
       return data;
     } catch (error) {
       console.error('Error fetching Riot account:', error);
@@ -256,7 +256,8 @@ export async function onSearchPlayerClicked() {
     gameName = document.getElementById("input_game_name").value;
     tagLine = document.getElementById("input_tag_line").value;
     console.log(`Searching for ${gameName}#${tagLine}`);
-    expSearchByRiotId();
+    var accountInfo = await expSearchByRiotId();
+    await expGetAccountInfoByPuuid(accountInfo.puuid);
 }
 
 async function searchByRiotId() {
@@ -272,18 +273,36 @@ async function searchByRiotId() {
 }
 
 export async function expSearchByRiotId() {
+    gameName = document.getElementById("input_game_name").value;
+    tagLine = document.getElementById("input_tag_line").value;
     try {
-      const response = await fetch(`http://localhost:3000/riot-api/${gameName}/${tagLine}`);
+        var apiUrl = `http://localhost:3000/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}`;
+        const response = await fetch(apiUrl);
       
-      // Check if the request was successful
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+        // Check if the request was successful
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
   
-      const data = await response.json();
-      console.log(data);
-      return data;
+        const data = await response.json();
+        console.log("expSearchByRiotId: " + apiUrl)
+        console.log("expSearchByRiotId: " + data.puuid);
+
+        return data;
     } catch (error) {
-      console.error('Error fetching Riot account:', error);
+        console.error('Error fetching Riot account:', error);
     }
+}
+
+export async function expGetAccountInfoByPuuid(puuid) {
+    var apiUrl = `http://localhost:3000/lol/summoner/v4/summoners/by-puuid/${puuid}`;
+    console.log("expGetAccountInfoByPuuid: " + apiUrl);
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  
+    const data = await response.json();
+    console.log(data);
+    return data;
 }

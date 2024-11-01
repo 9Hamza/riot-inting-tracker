@@ -24,7 +24,7 @@ app.use(cors({
   methods: ['GET'], // Allow only specific methods if necessary
 }));
 
-app.get('/riot-api/:puuid', async (req, res) => {
+app.get('/riot/account/v1/accounts/by-puuid/:puuid', async (req, res) => {
   const { puuid } = req.params;
   try {
     const response = await axios.get(
@@ -37,7 +37,7 @@ app.get('/riot-api/:puuid', async (req, res) => {
 });
 
 // New route to search by Riot ID
-app.get('/riot-api/:gameName/:tagLine', async (req, res) => {
+app.get('/riot/account/v1/accounts/by-riot-id/:gameName/:tagLine', async (req, res) => {
   const { gameName, tagLine } = req.params;
   try {
     const apiUrl = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}/?api_key=${riotApiKey}`;
@@ -53,6 +53,26 @@ app.get('/riot-api/:gameName/:tagLine', async (req, res) => {
     res.json({ puuid, accountData: data });
   } catch (error) {
     res.status(error.response?.status || 500).send(error.message);
+  }
+});
+
+
+app.get('/lol/summoner/v4/summoners/by-puuid/:puuid', async (req, res) => {
+  const { puuid } = req.params;
+  
+  try {
+    var summonerInfoApiUrl = `https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${puuid}?api_key=${riotApiKey}`;
+    console.log('/riot-api/summoner-info/:puuid | '+summonerInfoApiUrl);
+    const response = await axios.get(summonerInfoApiUrl);
+    
+    if (!response.data) {
+      return res.status(404).send('Error!');
+    }
+
+    const data = response.data;
+    res.json({ data });
+  } catch (error) {
+    res.status(error.response?.status || 500).send("summoner-info error: "+error.message);
   }
 });
 

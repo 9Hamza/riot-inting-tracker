@@ -164,3 +164,24 @@ button:disabled {
     margin: 10px 0;
     text-align: center;
 }
+
+.summoner-container {
+    display: flex;
+}
+
+.summoner-icon {
+    border-radius: 20px;
+}
+
+.summoner-level-panel {
+    position:absolute;
+    top: 0;
+    background-color: #1E2328;
+    width: 80px;
+    height: 30px;
+    border-radius: 20px;
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    place-items: center;
+}
