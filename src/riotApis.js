@@ -154,6 +154,8 @@ function printApiKey() {
 // Main function to find the player with the highest deaths
 async function main() {
     await fetchLeagueList(rank.challenger);
+    await fetchLeagueList(rank.grandmaster);
+    await fetchLeagueList(rank.master);
 
     for (const entry of leagueListArray) {
         if (entry.summonerId) {
