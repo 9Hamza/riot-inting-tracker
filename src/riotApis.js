@@ -1,3 +1,7 @@
+import { getDatabase, ref, set } from "firebase/database";
+import { initializeFirebase } from "./firebase";
+import { addPlayerToDatabase, fetchExistingPlayers } from "./firebase";
+
 //#region classes
 class LeagueListDTO {
     constructor({ leagueId, entries, tier, name, queue }) {
@@ -151,16 +155,25 @@ function printApiKey() {
     console.log(riotApiKey);
 }
 
+
 // Main function to find the player with the highest deaths
 async function main() {
+    const existingPlayers = await fetchExistingPlayers();
     await fetchLeagueList(rank.challenger);
-    await fetchLeagueList(rank.grandmaster);
-    await fetchLeagueList(rank.master);
+    // await fetchLeagueList(rank.grandmaster);
+    // await fetchLeagueList(rank.master);
 
     for (const entry of leagueListArray) {
+        console.log(entry);
         if (entry.summonerId) {
             try {
                 const puuid = await getPuuid(entry.summonerId);
+                if (!existingPlayers.has(puuid)) {
+                    // Add the player if they don't already exist
+                    addPlayerToDatabase(puuid, entry);
+                } else {
+                    console.log("Player -- " + puuid + " -- already exists in database.")
+                }
                 playersPuuids.push(puuid);
             } catch (error) {
                 console.error(`Error processing entry: ${error}`);
