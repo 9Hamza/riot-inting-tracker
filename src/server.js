@@ -56,6 +56,17 @@ app.get('/riot/account/v1/accounts/by-riot-id/:gameName/:tagLine', async (req, r
   }
 });
 
+app.get('/lol/match/v5/matches/:matchId', async (req, res) => {
+  const { matchId } = req.params;
+  try {
+    const response = await axios.get(
+      `https://europe.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${riotApiKey}`
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(error.response?.status || 500).send(error.message);
+  }
+});
 
 app.get('/lol/summoner/v4/summoners/by-puuid/:puuid', async (req, res) => {
   const { puuid } = req.params;

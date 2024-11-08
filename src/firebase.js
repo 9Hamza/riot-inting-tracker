@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getDatabase, ref, set, get } from "firebase/database"; // Import getDatabase, ref, and set
+import { getDatabase, ref, set, get, update } from "firebase/database"; // Import getDatabase, ref, and set
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -43,7 +43,7 @@ export function initializeFirebase() {
 export function addPlayerToDatabase(puuid, data) {
   console.log("Adding player -- " + puuid + " -- to database");
   const db = getDatabase();
-  set(ref(db, 'players/' + puuid), data).then(() => {
+  set(ref(db, 'players/' + puuid), {leagueItemDTO: data}).then(() => {
     console.log("Data written successfully");
   }).catch((error) => {
     console.error("Error writing data:", error);
@@ -66,5 +66,38 @@ export async function fetchExistingPlayers() {
   } catch (error) {
     console.error("Error fetching existing players:", error);
     return new Set(); // Return an empty set on error to prevent issues
+  }
+}
+
+export async function fetchMatchHistoryRanked(puuid) {
+  const db = getDatabase();
+  const matchesRef = ref(db, `players/${puuid}/matches`);
+
+  try {
+    const snapshot = await get(matchesRef);
+    if (snapshot.exists()) {
+      const matchesData = snapshot.val();
+      console.log("Fetched Matches From Firebase:", matchesData);
+      return matchesData; // Returns all match data under /players/puuid/matches
+    } else {
+      console.log("No matches found for this player.");
+      return null; // Return null if no matches exist
+    }
+  } catch (error) {
+    console.error("Error fetching matches:", error);
+    return null;
+  }
+}
+
+// This is not async because we don't really need to wait for it 
+export /*async*/ function saveMatchHistoryInDb(puuid, updates) {
+  console.log("Adding match history for player -- " + puuid + " -- to database");
+  const db = getDatabase();
+  try {
+    // Perform a single update operation with all match data
+    /*await*/ update(ref(db), updates);
+    console.log(`Successfully stored ${Object.keys(updates).length} matches for player ${puuid}`);
+  } catch (error) {
+    console.error("Error storing multiple matches:", error);
   }
 }

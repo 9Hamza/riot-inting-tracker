@@ -1,6 +1,6 @@
 import { getDatabase, ref, set } from "firebase/database";
-import { initializeFirebase } from "./firebase";
-import { addPlayerToDatabase, fetchExistingPlayers } from "./firebase";
+import { initializeFirebase, saveMatchHistoryInDb } from "./firebase";
+import { addPlayerToDatabase, fetchExistingPlayers, fetchMatchHistoryRanked } from "./firebase";
 
 //#region classes
 class LeagueListDTO {
@@ -140,6 +140,11 @@ async function getMatchHistoryRanked(puuid, startTime = '', endTime = '') {
     return data;
 }
 
+async function getMatchHistoryRankedFirebaseDb(puuid) {
+    let matchHistory = await fetchMatchHistoryRanked(puuid);
+    return matchHistory;
+}
+
 export async function findMostRecentInter() {
     let result;
     try {
@@ -160,11 +165,11 @@ function printApiKey() {
 async function main() {
     const existingPlayers = await fetchExistingPlayers();
     await fetchLeagueList(rank.challenger);
-    // await fetchLeagueList(rank.grandmaster);
+    await fetchLeagueList(rank.grandmaster);
     // await fetchLeagueList(rank.master);
 
     for (const entry of leagueListArray) {
-        console.log(entry);
+        // console.log(entry);
         if (entry.summonerId) {
             try {
                 const puuid = await getPuuid(entry.summonerId);
@@ -184,20 +189,66 @@ async function main() {
     const puuidDeathsMap = new Map();
 
     for (const puuid of playersPuuids) {
-        const matchHistoryList = await getMatchHistoryRanked(puuid);
-        const maxDeath = await getHighestDeathFromMatchHistoryList(puuid, matchHistoryList);
+        const matchHistoryListFromRiotApi = await getMatchHistoryRanked(puuid);
+        const matchHistoryListFromFirebaseDb = await getMatchHistoryRankedFirebaseDb(puuid);
+
+        let matchHistoryData = [];
+
+        // if player doesn't have any match histories saved
+        let updates = {};
+        if(matchHistoryListFromFirebaseDb == null) {
+            console.log("Match history not found in Firebase DB for player -- " + puuid + " --");
+            
+            if(matchHistoryListFromRiotApi != null) {
+                for (const matchId of matchHistoryListFromRiotApi) {
+                    const matchPath = `players/${puuid}/matches/${matchId}`;
+                    const matchData = await expGetMatchData(matchId);
+                    matchHistoryData.push(matchData);
+                    updates[matchPath] = matchData;
+                }
+            }
+        } else { // need to check if all 20 == 20 or not. temp else
+            // if player has match histories saved
+            const firebaseMatchIds = Object.keys(matchHistoryListFromFirebaseDb);
+            // check if every item in list1 is present in list2
+            const hasSameKeys = matchHistoryListFromRiotApi.every(key => firebaseMatchIds.includes(key));
+
+            if (hasSameKeys) {
+                console.log("User matchHistory is synced!")
+                matchHistoryData = Object.values(matchHistoryListFromFirebaseDb);
+            } else {
+                // TODO: modify logic here to get only last 20 games (or like based on selected condition)
+                console.log("User matchHistory is NOT synced! Syncing now...");
+                matchHistoryData = Object.values(matchHistoryListFromFirebaseDb);
+                const missingMatchIds = matchHistoryListFromRiotApi.filter(key => !firebaseMatchIds.includes(key));
+                for (const matchId of missingMatchIds) {
+                    const matchPath = `players/${puuid}/matches/${matchId}`;
+                    const matchData = await expGetMatchData(matchId);
+                    matchHistoryData.push(matchData);
+                    updates[matchPath] = matchData;
+                }
+            }
+        }
+        if (Object.keys(updates).length !== 0) {
+            saveMatchHistoryInDb(puuid, updates);
+        } // No need to wait for saving :)
+
+        const maxDeath = await getHighestDeathFromMatchHistoryList(puuid, matchHistoryData);
         puuidDeathsMap.set(puuid, maxDeath);
     }
 
     let maxDeaths = -Infinity;
     let maxPuuid = '';
-    for (const [puuid, deaths] of puuidDeathsMap) {
+    console.log("puuids & deaths: "+puuidDeathsMap.size);
+    for (const [puuidKey, deaths] of puuidDeathsMap) {
+        console.log("puuidKey: " + puuidKey + " | " + deaths);
         if (deaths > maxDeaths) {
             maxDeaths = deaths;
-            maxPuuid = puuid;
+            maxPuuid = puuidKey;
         }
     }
 
+    console.log("maxPuuid is: "+maxPuuid)
     const playerName = await fetchRiotAccount(maxPuuid);
     console.log(`Inter of the day is: ${playerName.gameName} with ${maxDeaths} deaths`);
     let playerGameName = playerName.gameName;
@@ -232,18 +283,19 @@ async function getUsername(puuid) {
 // Get the highest death count from a player's match history
 async function getHighestDeathFromMatchHistoryList(puuid, matchHistoryList) {
     const deaths = [];
-
-    for (const matchId of matchHistoryList) {
-        const matchInfoLink = `https://europe.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${riotApiKey}`;
-        const response = await rateLimitedFetch(matchInfoLink);
-        const data = await response.json();
-        const participantDto = data.info.participants.find(p => p.puuid === puuid);
+    let deathsLogString = "";
+    for (const match of matchHistoryList) {
+        const participantDto = match.info.participants.find(p => p.puuid === puuid);
         if (participantDto) {
-            console.log(`${participantDto.deaths} deaths in ${matchId} for user ${puuid}`);
+            deathsLogString += participantDto.deaths + ", ";
+            // console.log(`${participantDto.deaths} deaths for user ${puuid}`);
             deaths.push(participantDto.deaths);
         }
     }
-
+    // remove the trailing comma and space
+    deathsLogString = deathsLogString.slice(0, -2);
+    const maxNumberOfDeaths = Math.max(...deaths);
+    console.log("Deaths: " + deathsLogString + " Max: " + maxNumberOfDeaths);
     return Math.max(...deaths);
 }
 
@@ -320,4 +372,11 @@ export async function expGetAccountInfoByPuuid(puuid) {
     const data = await response.json();
     console.log(data);
     return data;
+}
+
+async function expGetMatchData(matchId) {
+    const matchInfoLink = `http://localhost:3000/lol/match/v5/matches/${matchId}`;
+    const response = await rateLimitedFetch(matchInfoLink);
+    const data = await response.json();
+    return data; 
 }
