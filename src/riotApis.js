@@ -79,7 +79,14 @@ const rank = Object.freeze({
     challenger: 2
   });
 
-  async function rateLimitedFetch(url, options = {}) {
+const matchHistoryCondition = Object.freeze({
+    LAST_24_HOURS: "last_24_hours",
+    LAST_20_GAMES: "last_20_games",
+    LAST_7_DAYS: "last_7_days",
+    LAST_30_DAYS: "last_30_days"
+  });
+
+async function rateLimitedFetch(url, options = {}) {
     while (requestsIn1Sec >= REQUEST_LIMIT_1_SEC - 1 || requestsIn2Min >= REQUEST_LIMIT_2_MIN - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -165,7 +172,7 @@ function printApiKey() {
 async function main() {
     const existingPlayers = await fetchExistingPlayers();
     await fetchLeagueList(rank.challenger);
-    await fetchLeagueList(rank.grandmaster);
+    // await fetchLeagueList(rank.grandmaster);
     // await fetchLeagueList(rank.master);
 
     for (const entry of leagueListArray) {
@@ -202,8 +209,10 @@ async function main() {
             if(matchHistoryListFromRiotApi != null) {
                 for (const matchId of matchHistoryListFromRiotApi) {
                     const matchPath = `players/${puuid}/matches/${matchId}`;
-                    const matchData = await expGetMatchData(matchId);
-                    matchHistoryData.push(matchData);
+                    const matchData = await expGetMatchData(matchId, puuid);
+                    if (isWithinLast24Hours(matchData.gameEndTimestamp)) {
+                        matchHistoryData.push(matchData);
+                    }
                     updates[matchPath] = matchData;
                 }
             }
@@ -285,18 +294,24 @@ async function getHighestDeathFromMatchHistoryList(puuid, matchHistoryList) {
     const deaths = [];
     let deathsLogString = "";
     for (const match of matchHistoryList) {
-        const participantDto = match.info.participants.find(p => p.puuid === puuid);
-        if (participantDto) {
-            deathsLogString += participantDto.deaths + ", ";
+        // const participantDto = match.info.participants.find(p => p.puuid === puuid);
+        // if (participantDto) {
+            deathsLogString += match.deaths + ", ";
             // console.log(`${participantDto.deaths} deaths for user ${puuid}`);
-            deaths.push(participantDto.deaths);
-        }
+            // deaths.push(participantDto.deaths);
+            deaths.push(match.deaths);
+        // }
     }
     // remove the trailing comma and space
     deathsLogString = deathsLogString.slice(0, -2);
     const maxNumberOfDeaths = Math.max(...deaths);
     console.log("Deaths: " + deathsLogString + " Max: " + maxNumberOfDeaths);
     return Math.max(...deaths);
+}
+
+function getNumOfDeathInMatch(puuid, matchData) {
+    const participantDto = matchData.info.participants.find(p => p.puuid === puuid);
+    return participantDto.deaths;
 }
 
 export async function fetchRiotAccount(puuid) {
@@ -374,9 +389,24 @@ export async function expGetAccountInfoByPuuid(puuid) {
     return data;
 }
 
-async function expGetMatchData(matchId) {
+async function expGetMatchData(matchId, puuid) {
     const matchInfoLink = `http://localhost:3000/lol/match/v5/matches/${matchId}`;
     const response = await rateLimitedFetch(matchInfoLink);
     const data = await response.json();
-    return data; 
+    const numOfDeathInMatch = getNumOfDeathInMatch(puuid, data);
+    const gameEndTimestamp = data.info.gameEndTimestamp;
+    const resultObj = {
+        deaths: numOfDeathInMatch,
+        gameEndTimestamp: gameEndTimestamp
+    }
+    return resultObj; 
+}
+
+function isWithinLast24Hours(unixTimestampInMs) {
+    const now = Date.now(); // Current time in milliseconds
+    const oneDayInMs = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    // Check if the timestamp is within the last 24 hours
+    const withinLast24Hours = now - unixTimestampInMs <= oneDayInMs && now >= unixTimestampInMs;
+    console.log("Match is within last 24 hours: " + withinLast24Hours);
+    return withinLast24Hours;
 }

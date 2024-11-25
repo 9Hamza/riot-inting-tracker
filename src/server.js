@@ -91,3 +91,22 @@ app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Server: the API key being fetched from env variables is: ${riotApiKey}`);
 });
+
+// Get the highest death count from a player's match history
+async function getHighestDeathFromMatch(puuid, matchHistoryList) {
+  const deaths = [];
+  let deathsLogString = "";
+  for (const match of matchHistoryList) {
+      const participantDto = match.info.participants.find(p => p.puuid === puuid);
+      if (participantDto) {
+          deathsLogString += participantDto.deaths + ", ";
+          // console.log(`${participantDto.deaths} deaths for user ${puuid}`);
+          deaths.push(participantDto.deaths);
+      }
+  }
+  // remove the trailing comma and space
+  deathsLogString = deathsLogString.slice(0, -2);
+  const maxNumberOfDeaths = Math.max(...deaths);
+  console.log("Deaths: " + deathsLogString + " Max: " + maxNumberOfDeaths);
+  return Math.max(...deaths);
+}
