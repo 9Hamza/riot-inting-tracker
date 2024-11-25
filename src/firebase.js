@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getDatabase, ref, set, get, update } from "firebase/database"; // Import getDatabase, ref, and set
+import { getDatabase, ref, set, get, update, remove } from "firebase/database"; // Import getDatabase, ref, and set
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -99,5 +99,17 @@ export /*async*/ function saveMatchHistoryInDb(puuid, updates) {
     console.log(`Successfully stored ${Object.keys(updates).length} matches for player ${puuid}`);
   } catch (error) {
     console.error("Error storing multiple matches:", error);
+  }
+}
+
+export async function deleteAllPlayers() {
+  const db = getDatabase();
+  const playersRef = ref(db, "/players");
+
+  try {
+    await remove(playersRef); // Deletes all data under /players
+    console.log("All data under /players has been deleted.");
+  } catch (error) {
+    console.error("Error deleting /players data:", error);
   }
 }

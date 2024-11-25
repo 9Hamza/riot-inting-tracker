@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { expGetAccountInfoByPuuid, expSearchByRiotId, findMostRecentInter } from './riotApis';
 import { onSearchPlayerClicked } from './riotApis';
 import './InterOfTheDay.css';
-import { addPlayerToDatabase } from './firebase';
+import { addPlayerToDatabase, deleteAllPlayers } from './firebase';
 
 function InterOfTheDay() {
     const [inter, setInter] = useState(null);
@@ -94,6 +94,7 @@ function InterOfTheDay() {
                     <button onClick={startTimer}>Start</button>
                     <button onClick={resetTimer}>Reset</button>
                     <button onClick={() => addPlayerToDatabase(12345,null)}>AddPlayerTest</button>
+                    <button onClick={deleteAllPlayers}>Delete All Players</button>
                 </div>
                 <button 
                     className="lol-button" 
