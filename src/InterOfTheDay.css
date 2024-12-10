@@ -1,5 +1,4 @@
 .inter-of-the-day {
-    padding: 20px;
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -46,7 +45,7 @@ button:disabled {
     max-width: 800px;
     margin: 40px auto;
     padding: 20px;
-    background: linear-gradient(to bottom, #0A1428, #091428);
+    /* background: linear-gradient(to bottom, #0A1428, #091428); */
     border-right: 2px solid #C89B3C;
     border-left: 2px solid #C89B3C;
     border-radius: 0px;
@@ -60,7 +59,7 @@ button:disabled {
     text-align: center;
     color: #C89B3C;
     font-size: 4.5em;
-    margin-bottom: 30px;
+    margin-bottom: 15px;
     text-transform: uppercase;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }

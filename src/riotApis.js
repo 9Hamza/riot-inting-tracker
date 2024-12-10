@@ -171,8 +171,8 @@ function printApiKey() {
 // Main function to find the player with the highest deaths
 async function main() {
     const existingPlayers = await fetchExistingPlayers();
-    await fetchLeagueList(rank.challenger);
-    // await fetchLeagueList(rank.grandmaster);
+    // await fetchLeagueList(rank.challenger);
+    await fetchLeagueList(rank.grandmaster);
     // await fetchLeagueList(rank.master);
 
     for (const entry of leagueListArray) {
@@ -210,9 +210,7 @@ async function main() {
                 for (const matchId of matchHistoryListFromRiotApi) {
                     const matchPath = `players/${puuid}/matches/${matchId}`;
                     const matchData = await expGetMatchData(matchId, puuid);
-                    if (isWithinLast24Hours(matchData.gameEndTimestamp)) {
-                        matchHistoryData.push(matchData);
-                    }
+                    matchHistoryData.push(matchData);
                     updates[matchPath] = matchData;
                 }
             }
@@ -232,7 +230,7 @@ async function main() {
                 const missingMatchIds = matchHistoryListFromRiotApi.filter(key => !firebaseMatchIds.includes(key));
                 for (const matchId of missingMatchIds) {
                     const matchPath = `players/${puuid}/matches/${matchId}`;
-                    const matchData = await expGetMatchData(matchId);
+                    const matchData = await expGetMatchData(matchId, puuid);
                     matchHistoryData.push(matchData);
                     updates[matchPath] = matchData;
                 }
@@ -294,13 +292,11 @@ async function getHighestDeathFromMatchHistoryList(puuid, matchHistoryList) {
     const deaths = [];
     let deathsLogString = "";
     for (const match of matchHistoryList) {
-        // const participantDto = match.info.participants.find(p => p.puuid === puuid);
-        // if (participantDto) {
+        // if the match happened within the last 24 hours, then consider it
+        if (isWithinLast24Hours(match.gameEndTimestamp)) {
             deathsLogString += match.deaths + ", ";
-            // console.log(`${participantDto.deaths} deaths for user ${puuid}`);
-            // deaths.push(participantDto.deaths);
-            deaths.push(match.deaths);
-        // }
+            deaths.push(match.deaths);     
+        }
     }
     // remove the trailing comma and space
     deathsLogString = deathsLogString.slice(0, -2);
@@ -354,6 +350,7 @@ async function searchByRiotId() {
     await fetchRiotAccount(puuid);
 }
 
+// This function is getting game name and tagline from user input inside html document (currently not being used)
 export async function expSearchByRiotId() {
     gameName = document.getElementById("input_game_name").value;
     tagLine = document.getElementById("input_tag_line").value;

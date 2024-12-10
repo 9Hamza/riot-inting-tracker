@@ -1,5 +1,4 @@
 import Header from "./Header.jsx"
-import Footer from "./Footer.jsx";
 import Body from "./Body.jsx";
 import { initializeFirebase } from './firebase';
 import { useEffect } from "react";
@@ -15,7 +14,6 @@ function App() {
       <div className="body-background-image">
         {/* <Header/> */}
         <Body/>
-        <Footer/>
       </div>
       
       </>
