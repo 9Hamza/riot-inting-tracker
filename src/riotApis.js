@@ -1,3 +1,7 @@
+import { getDatabase, ref, set } from "firebase/database";
+import { initializeFirebase, saveMatchHistoryInDb } from "./firebase";
+import { addPlayerToDatabase, fetchExistingPlayers, fetchMatchHistoryRanked } from "./firebase";
+
 //#region classes
 class LeagueListDTO {
     constructor({ leagueId, entries, tier, name, queue }) {
@@ -54,6 +58,12 @@ class LeagueEntryDTO {
 //#endregion
 
 const riotApiKey = import.meta.env.VITE_RIOT_API_KEY;
+// Rate Limiting Configuration
+const REQUEST_LIMIT_1_SEC = 20;
+const REQUEST_LIMIT_2_MIN = 100;
+let requestsIn1Sec = 0;
+let requestsIn2Min = 0;
+
 var region = 'me1';
 const rootlink = `https://${region}.api.riotgames.com`;
 var endpoint = '';
@@ -69,81 +79,77 @@ const rank = Object.freeze({
     challenger: 2
   });
 
-  async function fetchLeagueList(rankInput) {
-    let rankString;
-    
-    switch (rankInput) {
-        case rank.master:
-            rankString = 'masterleagues';
-            break;
-        case rank.grandmaster:
-            rankString = 'grandmasterleagues';
-            break;
-        case rank.challenger:
-            rankString = 'challengerleagues';
-            break;
-        default:
-            throw new Error('Invalid rank');
-    }
-    
-    const link = `https://me1.api.riotgames.com/lol/league/v4/${rankString}/by-queue/RANKED_SOLO_5x5?api_key=${riotApiKey}`;
-    
-    try {
-        const response = await fetch(link);
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        const leagueList = new LeagueListDTO(data);
-        
-        leagueListArray = [leagueList];
-        leagueList.entries.forEach(element => {
-            console.log(element);
-            leagueListArray.push(element);
-        });
+const matchHistoryCondition = Object.freeze({
+    LAST_24_HOURS: "last_24_hours",
+    LAST_20_GAMES: "last_20_games",
+    LAST_7_DAYS: "last_7_days",
+    LAST_30_DAYS: "last_30_days"
+  });
 
-        return leagueListArray;
-    } catch (error) {
-        console.error('Error fetching data:', error);
-        throw error;
+async function rateLimitedFetch(url, options = {}) {
+    while (requestsIn1Sec >= REQUEST_LIMIT_1_SEC - 1 || requestsIn2Min >= REQUEST_LIMIT_2_MIN - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    const response = await fetch(url, options);
+    requestsIn1Sec++;
+    requestsIn2Min++;
+
+    setTimeout(() => requestsIn1Sec--, 1000); // Decrement 1-second count after 1 second
+    setTimeout(() => requestsIn2Min--, 120000); // Decrement 2-minute count after 2 minutes
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    return response;
+}
+
+  // Fetch league list for a specified rank
+async function fetchLeagueList(rankInput) {
+    const rankStringMap = {
+        [rank.master]: 'masterleagues',
+        [rank.grandmaster]: 'grandmasterleagues',
+        [rank.challenger]: 'challengerleagues'
+    };
+
+    const rankString = rankStringMap[rankInput];
+    if (!rankString) throw new Error('Invalid rank');
+
+    const link = `https://me1.api.riotgames.com/lol/league/v4/${rankString}/by-queue/RANKED_SOLO_5x5?api_key=${riotApiKey}`;
+    const response = await rateLimitedFetch(link);
+    const data = await response.json();
+
+    const leagueList = new LeagueListDTO(data);
+    leagueListArray = [leagueList, ...leagueList.entries];
+    return leagueListArray;
 }
 
 // Get a summoner by summoner ID. Returns: SummonerDTO 
 // https://me1.api.riotgames.com/lol/summoner/v4/summoners/HhaLwqxygQumCshTvkK-_MzXYFzUNWxaq6FFIB5KDiUoN_wTOPIvoyVnvg?api_key=RGAPI-46f7cde7-5a38-44f3-b5e0-b7728d193af2
-function get_puuid(summonerId) {
-    endpoint = `/lol/summoner/v4/summoners/${summonerId}`;
-    var link = getApiLink();
-    console.log(link);
-
-    return fetch(link)
-    .then(response => {
-        return response.json();
-    })
-    .then(data => {
-        console.log(data)
-        return data.puuid;
-    })
+// Get a player's PUUID using summoner ID
+async function getPuuid(summonerId) {
+    const link = `${rootlink}/lol/summoner/v4/summoners/${summonerId}?api_key=${riotApiKey}`;
+    const response = await rateLimitedFetch(link);
+    const data = await response.json();
+    return data.puuid;
 }
+
 // SOMETHING TO NOTE HERE IS THAT THE MATCH HISTORIES OF USERS ARE STORED IN THE EUROPE REGION FOR SOME REASON AHAHAHA
 // https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/LMjebwoI02k0sP7H08pB7uiydcg_FQ9p7RRbVIohHIQSJ0rasGbhjNjIaMNqtgxWv53Dku5xEZLHmw/ids?type=ranked&start=0&count=100&api_key=RGAPI-46f7cde7-5a38-44f3-b5e0-b7728d193af2
+// Get match history for a player's PUUID
 async function getMatchHistoryRanked(puuid, startTime = '', endTime = '') {
-    var startTimeArg = `${startTime == '' ? '' : `startTime=${startTime}&`}`;
-    var endTimeArg = `${endTime == '' ? '' : `endTime=${endTime}&`}`;
-    var link = `https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?${startTimeArg}${endTimeArg}type=ranked&start=0&count=20&api_key=${riotApiKey}`;
+    const startTimeArg = startTime ? `startTime=${startTime}&` : '';
+    const endTimeArg = endTime ? `endTime=${endTime}&` : '';
+    const link = `https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?${startTimeArg}${endTimeArg}type=ranked&start=0&count=20&api_key=${riotApiKey}`;
     
-    console.log(link);
+    const response = await rateLimitedFetch(link);
+    const data = await response.json();
+    return data;
+}
 
-    try {
-        const response = await fetch(link);   // Await fetch here
-        const data = await response.json();   // Await response.json here
-        console.log(data);
-        return data;                          // Return the data after it's resolved
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        throw error;                          // Optionally rethrow the error
-    }
+async function getMatchHistoryRankedFirebaseDb(puuid) {
+    let matchHistory = await fetchMatchHistoryRanked(puuid);
+    return matchHistory;
 }
 
 export async function findMostRecentInter() {
@@ -157,58 +163,107 @@ export async function findMostRecentInter() {
     return result;
 }
 
-async function main() {
-    console.log("API KEY: " + riotApiKey);
-    return;
-    await fetchLeagueList(rank.challenger);
+function printApiKey() {
+    console.log(riotApiKey);
+}
 
-    // get puuid for every summonerId in list of players
+
+// Main function to find the player with the highest deaths
+async function main() {
+    const existingPlayers = await fetchExistingPlayers();
+    // await fetchLeagueList(rank.challenger);
+    await fetchLeagueList(rank.grandmaster);
+    // await fetchLeagueList(rank.master);
+
     for (const entry of leagueListArray) {
+        // console.log(entry);
         if (entry.summonerId) {
             try {
-                const puuid = await get_puuid(entry.summonerId);
-                if (puuid) {
-                    playersPuuids.push(puuid);
+                const puuid = await getPuuid(entry.summonerId);
+                if (!existingPlayers.has(puuid)) {
+                    // Add the player if they don't already exist
+                    addPlayerToDatabase(puuid, entry);
+                } else {
+                    console.log("Player -- " + puuid + " -- already exists in database.")
                 }
+                playersPuuids.push(puuid);
             } catch (error) {
                 console.error(`Error processing entry: ${error}`);
             }
         }
     }
 
-    console.log('Collected PUUIDs:', playersPuuids);
-
     const puuidDeathsMap = new Map();
 
-    // get match history for every puuid
     for (const puuid of playersPuuids) {
-        const todayEpoch = getTodayEpoch().toString();
-        const yesterdayEpoch = getYesterdayEpoch().toString();
-        const matchHistoryList = await getMatchHistoryRanked(puuid);
-        const maxDeath = await getHighestDeathFromMatchHistoryList(puuid, matchHistoryList);
+        const matchHistoryListFromRiotApi = await getMatchHistoryRanked(puuid);
+        const matchHistoryListFromFirebaseDb = await getMatchHistoryRankedFirebaseDb(puuid);
+
+        let matchHistoryData = [];
+
+        // if player doesn't have any match histories saved
+        let updates = {};
+        if(matchHistoryListFromFirebaseDb == null) {
+            console.log("Match history not found in Firebase DB for player -- " + puuid + " --");
+            
+            if(matchHistoryListFromRiotApi != null) {
+                for (const matchId of matchHistoryListFromRiotApi) {
+                    const matchPath = `players/${puuid}/matches/${matchId}`;
+                    const matchData = await expGetMatchData(matchId, puuid);
+                    matchHistoryData.push(matchData);
+                    updates[matchPath] = matchData;
+                }
+            }
+        } else { // need to check if all 20 == 20 or not. temp else
+            // if player has match histories saved
+            const firebaseMatchIds = Object.keys(matchHistoryListFromFirebaseDb);
+            // check if every item in list1 is present in list2
+            const hasSameKeys = matchHistoryListFromRiotApi.every(key => firebaseMatchIds.includes(key));
+
+            if (hasSameKeys) {
+                console.log("User matchHistory is synced!")
+                matchHistoryData = Object.values(matchHistoryListFromFirebaseDb);
+            } else {
+                // TODO: modify logic here to get only last 20 games (or like based on selected condition)
+                console.log("User matchHistory is NOT synced! Syncing now...");
+                matchHistoryData = Object.values(matchHistoryListFromFirebaseDb);
+                const missingMatchIds = matchHistoryListFromRiotApi.filter(key => !firebaseMatchIds.includes(key));
+                for (const matchId of missingMatchIds) {
+                    const matchPath = `players/${puuid}/matches/${matchId}`;
+                    const matchData = await expGetMatchData(matchId, puuid);
+                    matchHistoryData.push(matchData);
+                    updates[matchPath] = matchData;
+                }
+            }
+        }
+        if (Object.keys(updates).length !== 0) {
+            saveMatchHistoryInDb(puuid, updates);
+        } // No need to wait for saving :)
+
+        const maxDeath = await getHighestDeathFromMatchHistoryList(puuid, matchHistoryData);
         puuidDeathsMap.set(puuid, maxDeath);
     }
 
-    // GET PLAYER WITH MAX DEATHS
     let maxDeaths = -Infinity;
     let maxPuuid = '';
-
-    // Iterate through the Map to find the puuid with the highest deaths
-    for (const [puuid, deaths] of puuidDeathsMap) {
+    console.log("puuids & deaths: "+puuidDeathsMap.size);
+    for (const [puuidKey, deaths] of puuidDeathsMap) {
+        console.log("puuidKey: " + puuidKey + " | " + deaths);
         if (deaths > maxDeaths) {
             maxDeaths = deaths;
-            maxPuuid = puuid;
+            maxPuuid = puuidKey;
         }
     }
 
-    // var playerName = await getUsername(maxPuuid);
-    var playerName = await fetchRiotAccount(maxPuuid);
-    console.log(`Inter of the day is: ${playerName} with ${maxDeaths}`);
-    return { puuid: maxPuuid, deaths: maxDeaths, playerName: playerName };
+    console.log("maxPuuid is: "+maxPuuid)
+    const playerName = await fetchRiotAccount(maxPuuid);
+    console.log(`Inter of the day is: ${playerName.gameName} with ${maxDeaths} deaths`);
+    let playerGameName = playerName.gameName;
+    return { puuid: maxPuuid, deaths: maxDeaths, playerGameName };
 }
 
+// Uncomment to run the main function
 // main();
-console.log('The RIOT Api Key is: '+riotApiKey);
 
 
 function getApiLink() {
@@ -224,49 +279,40 @@ function getYesterdayEpoch() {
     return getTodayEpoch() - (24 * 60 * 60 * 1000);
 }
 
+// Get username for a given PUUID
 async function getUsername(puuid) {
     const link = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-puuid/${puuid}?api_key=${riotApiKey}`;
-    try {
-        const response = await fetch(link);
-        const data = await response.json();
-        console.log(data);
-        return `${data.gameName}#${data.tagLine}`;
-    } catch (error) {
-        console.error('Error fetching username:', error);
-        throw error;
-    }
+    const response = await rateLimitedFetch(link);
+    const data = await response.json();
+    return `${data.gameName}#${data.tagLine}`;
 }
 
+// Get the highest death count from a player's match history
 async function getHighestDeathFromMatchHistoryList(puuid, matchHistoryList) {
     const deaths = [];
-
-    for (const entry of matchHistoryList) {
-        // Construct the match info link
-        var matchInfoLink = `https://europe.api.riotgames.com/lol/match/v5/matches/${entry}?api_key=${riotApiKey}`;
-        
-        try {
-            // Await the fetch and response
-            const response = await fetch(matchInfoLink);
-            const data = await response.json();
-
-            // Find the participant with the matching puuid
-            const participantDto = data.info.participants.find(p => p.puuid === puuid);
-            if (participantDto) {
-                console.log(`${participantDto.deaths} deaths in ${entry} for user ${puuid}`);
-                deaths.push(participantDto.deaths);
-            }
-        } catch (error) {
-            console.error(`Error fetching match data for entry ${entry}:`, error);
+    let deathsLogString = "";
+    for (const match of matchHistoryList) {
+        // if the match happened within the last 24 hours, then consider it
+        if (isWithinLast24Hours(match.gameEndTimestamp)) {
+            deathsLogString += match.deaths + ", ";
+            deaths.push(match.deaths);     
         }
     }
-
-    // Return the highest death count
+    // remove the trailing comma and space
+    deathsLogString = deathsLogString.slice(0, -2);
+    const maxNumberOfDeaths = Math.max(...deaths);
+    console.log("Deaths: " + deathsLogString + " Max: " + maxNumberOfDeaths);
     return Math.max(...deaths);
+}
+
+function getNumOfDeathInMatch(puuid, matchData) {
+    const participantDto = matchData.info.participants.find(p => p.puuid === puuid);
+    return participantDto.deaths;
 }
 
 export async function fetchRiotAccount(puuid) {
     try {
-      const response = await fetch(`http://localhost:3000/riot-api/${puuid}`);
+      const response = await fetch(`http://localhost:3000/riot/account/v1/accounts/by-puuid/${puuid}`);
       
       // Check if the request was successful
       if (!response.ok) {
@@ -274,8 +320,90 @@ export async function fetchRiotAccount(puuid) {
       }
   
       const data = await response.json();
+      console.log("fetchRiotAccount: "+data);
       return data;
     } catch (error) {
       console.error('Error fetching Riot account:', error);
     }
+}
+
+var gameName = "";
+var tagLine = "";
+
+export async function onSearchPlayerClicked() {
+    gameName = document.getElementById("input_game_name").value;
+    tagLine = document.getElementById("input_tag_line").value;
+    console.log(`Searching for ${gameName}#${tagLine}`);
+    var accountInfo = await expSearchByRiotId();
+    await expGetAccountInfoByPuuid(accountInfo.puuid);
+}
+
+async function searchByRiotId() {
+    var apiUrl = `https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}/?api_key=${riotApiKey}`;
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  
+    const data = await response.json();
+    var puuid = data.puuid;
+    await fetchRiotAccount(puuid);
+}
+
+// This function is getting game name and tagline from user input inside html document (currently not being used)
+export async function expSearchByRiotId() {
+    gameName = document.getElementById("input_game_name").value;
+    tagLine = document.getElementById("input_tag_line").value;
+    try {
+        var apiUrl = `http://localhost:3000/riot/account/v1/accounts/by-riot-id/${gameName}/${tagLine}`;
+        const response = await fetch(apiUrl);
+      
+        // Check if the request was successful
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+  
+        const data = await response.json();
+        console.log("expSearchByRiotId: " + apiUrl)
+        console.log("expSearchByRiotId: " + data.puuid);
+
+        return data;
+    } catch (error) {
+        console.error('Error fetching Riot account:', error);
+    }
+}
+
+export async function expGetAccountInfoByPuuid(puuid) {
+    var apiUrl = `http://localhost:3000/lol/summoner/v4/summoners/by-puuid/${puuid}`;
+    console.log("expGetAccountInfoByPuuid: " + apiUrl);
+    const response = await fetch(apiUrl);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  
+    const data = await response.json();
+    console.log(data);
+    return data;
+}
+
+async function expGetMatchData(matchId, puuid) {
+    const matchInfoLink = `http://localhost:3000/lol/match/v5/matches/${matchId}`;
+    const response = await rateLimitedFetch(matchInfoLink);
+    const data = await response.json();
+    const numOfDeathInMatch = getNumOfDeathInMatch(puuid, data);
+    const gameEndTimestamp = data.info.gameEndTimestamp;
+    const resultObj = {
+        deaths: numOfDeathInMatch,
+        gameEndTimestamp: gameEndTimestamp
+    }
+    return resultObj; 
+}
+
+function isWithinLast24Hours(unixTimestampInMs) {
+    const now = Date.now(); // Current time in milliseconds
+    const oneDayInMs = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    // Check if the timestamp is within the last 24 hours
+    const withinLast24Hours = now - unixTimestampInMs <= oneDayInMs && now >= unixTimestampInMs;
+    console.log("Match is within last 24 hours: " + withinLast24Hours);
+    return withinLast24Hours;
 }
