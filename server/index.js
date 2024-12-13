@@ -18,12 +18,12 @@ import {
   initializeFirebase,
   saveInterOfTheDay,
   saveMatchHistoryInDb,
-} from "../client/src/firebase.js";
+} from "./firebase.js";
 import {
   addPlayerToDatabase,
   fetchExistingPlayers,
   fetchMatchHistoryRanked,
-} from "../client/src/firebase.js";
+} from "./firebase.js";
 
 dotenv.config();
 
