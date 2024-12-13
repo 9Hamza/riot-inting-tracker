@@ -3,7 +3,9 @@
 IMPORTANT INFORMATION TO KNOW WHEN RUNNING THIS FILE:
 
 - WHEN RUNNING THIS FROM TERMINAL, MY PWD NEEDS TO BE IN THE ROOT DIRECTORY. AFTER THAT, I CAN DO 
-- `node src/server.js`. ALSO MAKE SURE THAT .ENV FILE IS PLACED IN THE ROOT DIRECTORY.
+- `node src/index.js`. ALSO MAKE SURE THAT .ENV FILE IS PLACED IN THE ROOT DIRECTORY.
+
+- I BELIEVE FILE NEED TO BE NAMED INDEX.JS TO BE CALLED BY VERCEL
 
 */
 
@@ -16,12 +18,12 @@ import {
   initializeFirebase,
   saveInterOfTheDay,
   saveMatchHistoryInDb,
-} from "./firebase.js";
+} from "../client/src/firebase.js";
 import {
   addPlayerToDatabase,
   fetchExistingPlayers,
   fetchMatchHistoryRanked,
-} from "./firebase.js";
+} from "../client/src/firebase.js";
 
 dotenv.config();
 
