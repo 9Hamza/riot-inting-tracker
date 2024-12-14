@@ -254,25 +254,45 @@ const matchHistoryCondition = Object.freeze({
 });
 
 async function rateLimitedFetch(url, options = {}) {
+  const DEFAULT_RETRY_AFTER = 1000; // Default retry time in milliseconds (1 second)
+
   while (
     requestsIn1Sec >= REQUEST_LIMIT_1_SEC - 1 ||
     requestsIn2Min >= REQUEST_LIMIT_2_MIN - 1
   ) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second before checking limits again
   }
 
-  const response = await fetch(url, options);
-  requestsIn1Sec++;
-  requestsIn2Min++;
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+      requestsIn1Sec++;
+      requestsIn2Min++;
 
-  setTimeout(() => requestsIn1Sec--, 1000); // Decrement 1-second count after 1 second
-  setTimeout(() => requestsIn2Min--, 120000); // Decrement 2-minute count after 2 minutes
+      // Decrement counters after their respective limits
+      setTimeout(() => requestsIn1Sec--, 1000);
+      setTimeout(() => requestsIn2Min--, 120000);
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! Status: ${response.status}`);
+      if (response.status === 429) {
+        // Handle rate-limiting
+        const retryAfter = parseInt(response.headers.get("Retry-After"), 10) || (DEFAULT_RETRY_AFTER / 1000);
+        console.warn(`Rate limited! Retrying after ${retryAfter} seconds...`);
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue; // Retry the request
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`Error in rateLimitedFetch: ${error.message}`);
+      throw error; // Re-throw error after logging
+    }
   }
-  return response;
 }
+
 
 // Fetch league list for a specified rank
 async function fetchLeagueList(rankInput) {
